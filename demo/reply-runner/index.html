@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reply Runner: a game about tone and empathy in customer messages</title>
+<meta name="description" content="A short arcade runner that teaches tone and empathy in written customer communication. Designed by Vincenzo Asaro.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sky: #1f2a4d;
+    --glow: #f6a96c;
+    --road: #34314a;
+    --paint: #fff1c9;
+    --warm: #1f9e7c;
+    --warm-soft: #dff3ec;
+    --cold: #d94f4f;
+    --cold-soft: #fbe6e4;
+    --paper: #f2f5fb;
+    --card: #ffffff;
+    --ink: #1c2233;
+    --muted: #5a6378;
+    --line: #d6dceb;
+    --display: 'Unbounded', 'Arial Black', system-ui, sans-serif;
+    --text: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { height: 100%; }
+  body {
+    min-height: 100%; background: var(--sky); color: var(--ink); font-family: var(--text); font-size: 16px; line-height: 1.45;
+    padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, a:focus-visible { outline: 3px solid var(--glow); outline-offset: 2px; }
+  .app { max-width: 1040px; margin: 0 auto; padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 12px; min-height: 100vh; }
+
+  /* ---------- HUD ---------- */
+  .hud { display: flex; align-items: center; gap: 18px; color: #e9edf8; flex-wrap: wrap; }
+  .brand { font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: .01em; margin-right: auto; }
+  .stat { display: flex; flex-direction: column; line-height: 1.1; }
+  .stat small { font-size: 12px; color: #aab3cc; }
+  .stat b { font-family: var(--display); font-weight: 500; font-size: 17px; }
+  .trust { display: flex; gap: 4px; }
+  .trust i { width: 14px; height: 14px; border-radius: 50%; background: var(--glow); display: inline-block; }
+  .trust i.off { background: transparent; box-shadow: inset 0 0 0 2px #59627f; }
+  .iconbtn { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); color: #e9edf8; border-radius: 8px; padding: 6px 11px; font-size: 14px; }
+  .iconbtn:hover { background: rgba(255,255,255,.16); }
+
+  /* ---------- stage ---------- */
+  .stage { position: relative; border-radius: 16px; overflow: hidden; aspect-ratio: 16 / 8.2; min-height: 300px; background: var(--sky); touch-action: pan-y; }
+  canvas { display: block; width: 100%; height: 100%; }
+  .bubble {
+    position: absolute; left: 18px; top: 16px; max-width: min(520px, calc(100% - 36px));
+    background: var(--card); border-radius: 16px 16px 16px 4px; padding: 12px 15px 13px; box-shadow: 0 6px 22px rgba(10,14,30,.35);
+  }
+  .bubble .who { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .bubble .who b { color: var(--ink); }
+  .mood { font-size: 12px; padding: 1px 8px; border-radius: 999px; background: #eef1f8; color: var(--ink); }
+  .bubble p { font-size: 18px; line-height: 1.35; }
+  .timer { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; background: rgba(255,255,255,.15); }
+  .timer span { display: block; height: 100%; width: 100%; background: var(--glow); transform-origin: left; }
+  .toast {
+    position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); width: min(560px, calc(100% - 32px));
+    background: var(--warm-soft); color: var(--ink); border-left: 5px solid var(--warm); border-radius: 10px; padding: 10px 14px; font-size: 15px;
+    box-shadow: 0 6px 22px rgba(10,14,30,.3); display: none;
+  }
+  .toast b { color: var(--warm); }
+
+  /* ---------- choices ---------- */
+  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .choice {
+    text-align: left; background: var(--card); border: 2px solid transparent; border-radius: 12px; padding: 11px 13px 12px;
+    display: flex; gap: 10px; align-items: flex-start; min-height: 92px; transition: border-color .12s, transform .12s;
+  }
+  .choice .lane {
+    flex: none; font-family: var(--display); font-weight: 700; font-size: 15px; width: 30px; height: 30px; border-radius: 50%;
+    display: grid; place-items: center; background: #e7ebf5; color: var(--ink);
+  }
+  .choice .txt { font-size: 15.5px; line-height: 1.38; }
+  .choice:hover { border-color: #b9c3dc; }
+  .choice[aria-pressed="true"] { border-color: var(--glow); transform: translateY(-2px); }
+  .choice[aria-pressed="true"] .lane { background: var(--glow); }
+  .choices[data-locked="true"] .choice { cursor: default; }
+  .actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: #aab3cc; font-size: 14px; flex-wrap: wrap; }
+  .primary {
+    background: var(--glow); color: var(--ink); border: none; border-radius: 10px; padding: 10px 18px; font-weight: 700; font-size: 16px;
+  }
+  .primary:hover { filter: brightness(1.05); }
+  .primary[disabled] { opacity: .45; cursor: default; }
+  .ghost { background: none; border: 1.5px solid var(--line); border-radius: 10px; padding: 9px 16px; font-weight: 700; color: var(--ink); }
+  .ghost:hover { background: #e9edf7; }
+  kbd { font-family: var(--text); font-size: 12px; border: 1px solid #59627f; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; color: #e9edf8; }
+
+  /* ---------- overlays ---------- */
+  .overlay { position: fixed; inset: 0; background: rgba(15,20,40,.62); display: none; align-items: center; justify-content: center; padding: 18px; z-index: 10; }
+  .overlay.open { display: flex; }
+  .panel { background: var(--paper); border-radius: 18px; width: min(640px, 100%); max-height: calc(100vh - 36px); overflow: auto; padding: 26px 26px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+  .panel h1 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 4.5vw, 38px); line-height: 1.08; margin-bottom: 10px; }
+  .panel h2 { font-family: var(--display); font-weight: 700; font-size: 22px; line-height: 1.15; margin-bottom: 8px; }
+  .panel h3 { font-size: 16px; margin: 16px 0 6px; }
+  .panel p { color: var(--muted); }
+  .panel p + p { margin-top: 8px; }
+  .panel ul { margin: 8px 0 0 20px; color: var(--ink); }
+  .panel li + li { margin-top: 4px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; align-items: center; }
+  .toggle { display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; background: var(--card); border-radius: 10px; padding: 10px 12px; }
+  .toggle input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--warm); }
+  .toggle span { font-size: 15px; }
+  .toggle small { display: block; color: var(--muted); font-size: 13.5px; }
+  .quote { background: var(--card); border-radius: 10px; padding: 10px 13px; margin-top: 6px; font-size: 15.5px; }
+  .verdict-bad { color: var(--cold); }
+  .verdict-good { color: var(--warm); }
+  .tag { display: inline-block; font-size: 13px; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: #e7ebf5; margin-bottom: 10px; }
+  .bars { margin-top: 12px; display: grid; gap: 9px; }
+  .bar { display: grid; grid-template-columns: minmax(130px, 210px) 1fr 52px; gap: 10px; align-items: center; font-size: 14.5px; }
+  .bar .track { display: block; height: 10px; border-radius: 999px; background: #dfe4f0; overflow: hidden; }
+  .bar .fill { display: block; height: 100%; border-radius: 999px; background: var(--warm); }
+  .bar .fill.low { background: var(--cold); }
+  .bar em { font-style: normal; color: var(--muted); text-align: right; }
+  .big { font-family: var(--display); font-weight: 700; font-size: 30px; color: var(--ink); }
+  .scoreline { display: flex; gap: 26px; flex-wrap: wrap; margin: 6px 0 4px; }
+  .scoreline div small { display: block; color: var(--muted); font-size: 13px; }
+  .tips { margin-top: 10px; }
+  .tips div { background: var(--card); border-radius: 10px; padding: 10px 13px; margin-top: 8px; font-size: 15px; }
+  .tips b { display: block; }
+  .controls { font-size: 14px; color: var(--muted); margin-top: 12px; }
+
+  @media (max-width: 720px) {
+    .app { padding: 10px 10px 14px; gap: 10px; }
+    .stage { aspect-ratio: auto; height: 46vh; min-height: 280px; }
+    .bubble p { font-size: 16px; }
+    .choices { grid-template-columns: 1fr; gap: 7px; }
+    .choice { min-height: 0; padding: 9px 11px; }
+    .brand { font-size: 15px; width: 100%; }
+    .hud { gap: 10px 14px; }
+    .iconbtn { padding: 5px 9px; font-size: 13px; }
+    .keys { display: none; }
+    .bar { grid-template-columns: 1fr 1fr 44px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .choice { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="hud">
+    <div class="brand">Reply Runner</div>
+    <div class="stat"><small>Level</small><b id="hLevel">1</b></div>
+    <div class="stat"><small>Score</small><b id="hScore">0</b></div>
+    <div class="stat"><small>Streak</small><b id="hStreak">0</b></div>
+    <div class="stat"><small>Trust</small><span class="trust" id="hTrust" aria-label="3 of 3"></span></div>
+    <button class="iconbtn" id="btnSound" type="button" aria-pressed="true">Sound on</button>
+    <button class="iconbtn" id="btnPause" type="button">Pause</button>
+  </div>
+
+  <div class="stage" id="stage">
+    <canvas id="road" aria-hidden="true"></canvas>
+    <div class="bubble" id="bubble" aria-live="polite">
+      <div class="who"><b id="cName">Customer</b><span id="cChannel"></span><span class="mood" id="cMood"></span></div>
+      <p id="cMsg"></p>
+    </div>
+    <div class="toast" id="toast" role="status"></div>
+    <div class="timer" aria-hidden="true"><span id="timer"></span></div>
+  </div>
+
+  <div class="choices" id="choices" role="group" aria-label="Pick a reply lane">
+    <button class="choice" type="button" data-lane="0" aria-pressed="false"><span class="lane">A</span><span class="txt"></span></button>
+    <button class="choice" type="button" data-lane="1" aria-pressed="true"><span class="lane">B</span><span class="txt"></span></button>
+    <button class="choice" type="button" data-lane="2" aria-pressed="false"><span class="lane">C</span><span class="txt"></span></button>
+  </div>
+  <div class="actions">
+    <span class="keys">Steer with <kbd>←</kbd> <kbd>→</kbd> or <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>, then <kbd>Enter</kbd> to send early for a time bonus.</span>
+    <button class="primary" id="btnSend" type="button">Send this reply</button>
+  </div>
+</div>
+
+<!-- start -->
+<div class="overlay open" id="ovStart" role="dialog" aria-modal="true" aria-labelledby="startTitle">
+  <div class="panel">
+    <h1 id="startTitle">Reply Runner</h1>
+    <p>You're on the support desk at Harvest Box, a meal-kit delivery service. Customers write in, and the road splits into three possible replies. Run down the lane with the reply you'd send.</p>
+    <h3>By the end you'll be able to</h3>
+    <ul>
+      <li>acknowledge how a customer feels before solving the problem</li>
+      <li>own an issue instead of deflecting it</li>
+      <li>write in clear, positive language without jargon</li>
+      <li>match your tone to the customer's</li>
+      <li>set expectations you can keep</li>
+      <li>say no kindly and offer what you can do</li>
+    </ul>
+    <label class="toggle"><input type="checkbox" id="relaxed"><span>Relaxed pace<small>No timer. The road waits until you send your reply. Good for a first run or for reading at your own speed.</small></span></label>
+    <p class="controls">Three levels, fifteen customers. A wrong reply costs customer trust and a right one wins it back. Lose all three and the shift ends early.</p>
+    <div class="row">
+      <button class="primary" id="btnStart" type="button">Start running</button>
+      <button class="ghost" id="btnNotes" type="button">Designer's notes</button>
+    </div>
+  </div>
+</div>
+
+<!-- level intro -->
+<div class="overlay" id="ovLevel" role="dialog" aria-modal="true" aria-labelledby="lvTitle">
+  <div class="panel">
+    <h2 id="lvTitle"></h2>
+    <p id="lvText"></p>
+    <div class="row"><button class="primary" id="btnLevelGo" type="button">Go</button></div>
+  </div>
+</div>
+
+<!-- feedback after a miss -->
+<div class="overlay" id="ovFeedback" role="dialog" aria-modal="true" aria-labelledby="fbTitle">
+  <div class="panel">
+    <span class="tag" id="fbConcept"></span>
+    <h2 id="fbTitle" class="verdict-bad">That reply would cost you trust</h2>
+    <h3>You sent</h3>
+    <div class="quote" id="fbChosen"></div>
+    <p id="fbWhyBad" style="margin-top:8px"></p>
+    <h3 class="verdict-good">A stronger reply</h3>
+    <div class="quote" id="fbBest"></div>
+    <p id="fbWhyGood" style="margin-top:8px"></p>
+    <div class="row"><button class="primary" id="btnFbGo" type="button">Keep running</button></div>
+  </div>
+</div>
+
+<!-- pause -->
+<div class="overlay" id="ovPause" role="dialog" aria-modal="true" aria-labelledby="pTitle">
+  <div class="panel">
+    <h2 id="pTitle">Paused</h2>
+    <p>Take your time. The customer will wait.</p>
+    <div class="row"><button class="primary" id="btnResume" type="button">Resume</button><button class="ghost" id="btnQuit" type="button">End run and see results</button></div>
+  </div>
+</div>
+
+<!-- end / debrief -->
+<div class="overlay" id="ovEnd" role="dialog" aria-modal="true" aria-labelledby="endTitle">
+  <div class="panel">
+    <h2 id="endTitle"></h2>
+    <div class="scoreline">
+      <div><small>Score</small><span class="big" id="eScore">0</span></div>
+      <div><small>Right first time</small><span class="big" id="eAcc">0%</span></div>
+      <div><small>Best score</small><span class="big" id="eBest">0</span></div>
+    </div>
+    <h3>How you did on each skill</h3>
+    <div class="bars" id="eBars"></div>
+    <div class="tips" id="eTips"></div>
+    <div class="row">
+      <button class="primary" id="btnPractice" type="button">Practise the ones I missed</button>
+      <button class="ghost" id="btnAgain" type="button">Play again</button>
+      <button class="ghost" id="btnNotes2" type="button">Designer's notes</button>
+    </div>
+  </div>
+</div>
+
+<!-- designer's notes -->
+<div class="overlay" id="ovNotes" role="dialog" aria-modal="true" aria-labelledby="nTitle">
+  <div class="panel">
+    <h2 id="nTitle">Designer's notes</h2>
+    <p>Reply Runner is a portfolio piece by Vincenzo Asaro. The company, customers and scenarios are invented, but they are modelled on the kind of situations new support advisors meet in their first weeks.</p>
+    <h3>Objectives first, mechanics second</h3>
+    <p>Every scenario is tagged with one of six skills, and each skill is a learning objective shown before play. The runner only does one job: turn "which reply would you send?" into a quick, repeatable decision.</p>
+    <h3>Plausible wrong answers</h3>
+    <p>Wrong lanes are mistakes real advisors make: deflecting to a courier, a scripted "sorry for any inconvenience", over-apologising, promising what can't be guaranteed. Learners practise telling good from almost-good, not good from absurd.</p>
+    <h3>Stakes that forgive</h3>
+    <p>Customer trust gives the run some tension, but every right answer wins a point back and each level starts fresh. Mistakes cost something without locking a learner out of the later content.</p>
+    <h3>Feedback that teaches</h3>
+    <p>A miss stops the run and explains why the reply falls short, shows a stronger one and why it works. A hit gets a one-line reason, so a lucky guess still teaches something.</p>
+    <h3>A difficulty curve</h3>
+    <p>Level 1 contrasts warm and cold replies. Level 2 brings subtler traps and tone matching. Level 3 adds pressure, boundaries and a safety-critical message, with less time to read.</p>
+    <h3>Learner control</h3>
+    <p>Relaxed pace removes the timer for slower readers or second-language speakers. Sending early earns a bonus, so confident learners can move fast without forcing everyone to.</p>
+    <h3>Debrief and retrieval practice</h3>
+    <p>The results screen breaks performance down by skill and gives a tip for the weakest ones. "Practise the ones I missed" replays only those scenarios, with the replies in a new order.</p>
+    <div class="row"><button class="primary" id="btnNotesClose" type="button">Close</button></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ------------------------------------------------------------------ content
+  var SKILLS = {
+    ack:   { name: 'Acknowledge feelings', tip: 'Name what the customer is going through in your first sentence, specifically. "Forty minutes is too long" lands; "sorry for any inconvenience" doesn\'t.' },
+    own:   { name: 'Own the issue', tip: 'Speak for the company, even when someone else caused the problem. Say what you are doing about it rather than who is to blame.' },
+    clear: { name: 'Clear, positive language', tip: 'Lead with what you can do, and swap internal codes for everyday words.' },
+    tone:  { name: 'Match the tone', tip: 'Mirror the customer\'s register: relaxed with relaxed, formal with formal. Warmth never needs slang.' },
+    expect:{ name: 'Set clear expectations', tip: 'Say what happens next, when, and how they\'ll know. Promise only what you control.' },
+    limit: { name: 'Say no kindly', tip: 'Acknowledge, give the honest no with a reason, then offer a real alternative.' }
+  };
+  var S = [
+    // ---------- level 1
+    { lv: 1, skill: 'ack', who: 'Priya', ch: 'Chat', mood: 'Frustrated',
+      msg: 'My box didn\'t arrive and I have friends coming for dinner tonight. Great.',
+      opts: [
+        { t: 'That\'s really stressful with guests on the way. Let me find out where your box is right now.', ok: true, why: 'It names the real problem (guests tonight) before moving straight to action.' },
+        { t: 'Deliveries are handled by our courier, so you\'ll need to contact them directly.', why: 'It hands the problem back to the customer and ignores how they feel.' },
+        { t: 'Please provide your order number.', why: 'You will need the order number, but asking for it first, with no acknowledgement, reads as cold.' } ] },
+    { lv: 1, skill: 'clear', who: 'Marco', ch: 'Chat', mood: 'Hopeful',
+      msg: 'Can I change my delivery day for this week?',
+      opts: [
+        { t: 'This week\'s box is already packed, but I can move next week\'s to any day you like. Which works best?', ok: true, why: 'It is honest about this week and leads with what is possible.' },
+        { t: 'No, the cut-off was yesterday.', why: 'Accurate, but it ends the conversation on a no without offering anything.' },
+        { t: 'Unfortunately, that is against our policy.', why: '"Against our policy" sounds like a wall. Explain the reason and the alternative instead.' } ] },
+    { lv: 1, skill: 'own', who: 'Dana', ch: 'Email', mood: 'Annoyed',
+      msg: 'You\'ve charged me twice this month.',
+      opts: [
+        { t: 'Are you sure? Please check your bank statement again.', why: 'It suggests the customer is wrong before you have checked anything yourself.' },
+        { t: 'I\'m sorry about that. I can see the duplicate charge, and I\'ve started the refund for it now.', ok: true, why: 'It owns the mistake and confirms the action already taken.' },
+        { t: 'The payment system sometimes does that.', why: 'It blames "the system" and makes it sound normal, which erodes trust.' } ] },
+    { lv: 1, skill: 'clear', who: 'Lin', ch: 'Chat', mood: 'Confused',
+      msg: 'Why does my app say "SKU OOS sub applied"?',
+      opts: [
+        { t: 'That\'s an automated SKU OOS substitution.', why: 'It repeats the jargon back. The customer still doesn\'t know what happened.' },
+        { t: 'It\'s an automated message, you can ignore it.', why: 'It dismisses a real change to their order.' },
+        { t: 'One item was out of stock, so we swapped it for a similar one. Here\'s what you\'ll get instead.', ok: true, why: 'Plain words, and it answers the question they\'re really asking: what will I get?' } ] },
+    { lv: 1, skill: 'ack', who: 'Tomás', ch: 'Chat', mood: 'Overwhelmed',
+      msg: 'I\'m new and the app is confusing. I can\'t find my recipes anywhere.',
+      opts: [
+        { t: 'Did you read the welcome email?', why: 'It implies the customer missed something and leaves them still stuck.' },
+        { t: 'Totally understandable, it takes a moment to learn. Tap "My box", then "Recipes", and they\'re all there.', ok: true, why: 'It normalises the confusion, then gives exact, short steps.' },
+        { t: 'Recipes are in the menu.', why: 'Technically true, but vague, and it skips the reassurance a new customer needs.' } ] },
+    // ---------- level 2
+    { lv: 2, skill: 'ack', who: 'Grace', ch: 'Phone follow-up', mood: 'Exasperated',
+      msg: 'I was on hold for forty minutes just to ask about a refund.',
+      opts: [
+        { t: 'I apologise for any inconvenience this may have caused.', why: 'A scripted line. "Any inconvenience" and "may have" shrink a real forty-minute wait.' },
+        { t: 'We\'re experiencing high call volumes today.', why: 'An explanation, not an acknowledgement. It centres the company, not the customer.' },
+        { t: 'Forty minutes is far too long, and I\'m sorry. Let\'s sort out your refund now so you don\'t wait any longer.', ok: true, why: 'Specific, sincere, and it moves straight to the thing they came for.' } ] },
+    { lv: 2, skill: 'expect', who: 'Ahmed', ch: 'Chat', mood: 'Anxious',
+      msg: 'Will my replacement box definitely arrive tomorrow?',
+      opts: [
+        { t: 'It\'s booked for tomorrow, and I\'ll send you the tracking link as soon as it leaves, so you can see exactly where it is.', ok: true, why: 'It gives a clear plan and a way to check, without guaranteeing what the courier controls.' },
+        { t: 'Absolutely, 100% guaranteed!', why: 'Reassuring now, but it\'s a promise you don\'t control. If it slips, trust drops further.' },
+        { t: 'Probably, but no promises.', why: 'Honest, but vague and offhand. It increases anxiety instead of managing it.' } ] },
+    { lv: 2, skill: 'own', who: 'Ruth', ch: 'Email', mood: 'Mildly annoyed',
+      msg: 'The recipe card had the wrong cooking time on it.',
+      opts: [
+        { t: 'I\'m so, so sorry. This is awful, and I really can\'t apologise enough. I\'m so sorry.', why: 'Over-apologising makes a small issue feel bigger and still doesn\'t fix it.' },
+        { t: 'Thanks for flagging it. The correct time is 25 minutes, and I\'ve reported it so the card gets fixed.', ok: true, why: 'Proportionate: thanks, the fix they need now, and what you\'ve done so it won\'t happen again.' },
+        { t: 'Cooking times are only a guideline.', why: 'It defends the mistake instead of owning it.' } ] },
+    { lv: 2, skill: 'tone', who: 'Kai', ch: 'Chat', mood: 'Relaxed',
+      msg: 'hey quick q, can i skip next week? 🙂',
+      opts: [
+        { t: 'Dear Customer, we acknowledge receipt of your request and will process it accordingly.', why: 'Far too formal for a relaxed chat. It feels robotic.' },
+        { t: 'Yes.', why: 'Matches the brevity but loses the warmth, and doesn\'t confirm what happens next.' },
+        { t: 'Sure thing! Next week\'s box is skipped, and you won\'t be charged for it. 🙂', ok: true, why: 'Matches their easy tone and still confirms the outcome clearly.' } ] },
+    { lv: 2, skill: 'tone', who: 'Mrs Okafor', ch: 'Email', mood: 'Formal, upset',
+      msg: 'I wish to make a formal complaint about the conduct of your delivery driver.',
+      opts: [
+        { t: 'Thank you for raising this, and I\'m sorry for your experience. Could you tell me what happened, so I can report it to our delivery team?', ok: true, why: 'Respectful and formal like the customer, and it takes the complaint seriously.' },
+        { t: 'Oh no, that\'s not cool at all! 😬', why: 'Too casual for a formal complaint. It can sound like you\'re not taking it seriously.' },
+        { t: 'Our drivers work for a separate company.', why: 'Deflection. The customer chose your company, so the complaint is yours to handle.' } ] },
+    // ---------- level 3
+    { lv: 3, skill: 'limit', who: 'Jordan', ch: 'Chat', mood: 'Angry',
+      msg: 'Give me a whole year free or I\'m posting about you everywhere.',
+      opts: [
+        { t: 'Threats won\'t get you anywhere.', why: 'Escalates the conflict and ignores why they\'re angry.' },
+        { t: 'Fine, I\'ll give you a year for free.', why: 'Gives in to pressure, likely breaks policy, and teaches that threats work.' },
+        { t: 'I can tell you\'re really unhappy, and I want to put this right. I can\'t offer a free year, but I can refund this box and add credit to your next one.', ok: true, why: 'Acknowledges the anger, holds the boundary, and offers something real.' } ] },
+    { lv: 3, skill: 'expect', who: 'Sofia', ch: 'Email', mood: 'Impatient',
+      msg: 'So what happens now?',
+      opts: [
+        { t: 'We\'ll look into it.', why: 'No timeline and no next step. The customer will be writing in again soon.' },
+        { t: 'I\'ve logged it. Our team will review it within two working days, and you\'ll get an email with the outcome.', ok: true, why: 'Who, what, when, and how they\'ll hear back.' },
+        { t: 'Someone will be in touch at some point.', why: '"At some point" sets no expectation at all.' } ] },
+    { lv: 3, skill: 'ack', who: 'Ben', ch: 'Chat', mood: 'Irritated',
+      msg: 'Your app is useless. It logged me out AGAIN.',
+      opts: [
+        { t: 'Being logged out over and over is really annoying. Let\'s get you back in, and I\'ll pass this on to our app team.', ok: true, why: 'Validates the feeling without arguing about "useless", then fixes and escalates.' },
+        { t: 'The app works fine for most people.', why: 'Defensive, and it implies the problem is the customer.' },
+        { t: 'Have you tried turning it off and on again?', why: 'Can come across as dismissive when they\'ve had the problem repeatedly. Acknowledge first.' } ] },
+    { lv: 3, skill: 'limit', who: 'Elena', ch: 'Email', mood: 'Hopeful',
+      msg: 'Can I get a refund for a box I received two months ago?',
+      opts: [
+        { t: 'Sorry, it\'s too old. Anything else?', why: 'A bare no, rushed toward closing the conversation.' },
+        { t: 'Let me see... I\'ll refund it, just this once.', why: 'Breaks the policy inconsistently, which causes problems for colleagues and other customers.' },
+        { t: 'Refunds are possible within 30 days, so I can\'t refund that box. If something was wrong with it, tell me, and I\'ll log it and see what else I can do.', ok: true, why: 'An honest no with the reason, plus an open door if there was a real problem.' } ] },
+    { lv: 3, skill: 'own', who: 'Hannah', ch: 'Chat', mood: 'Alarmed',
+      msg: 'There were peanuts in my kids\' meal and it wasn\'t on the label!',
+      opts: [
+        { t: 'Thank you for your feedback, we\'ll pass it on.', why: 'Treats a safety incident like a routine comment.' },
+        { t: 'I\'m very sorry, this is serious. Is everyone safe? If anyone has symptoms, please get medical help now. I\'m escalating this to our food safety team immediately.', ok: true, why: 'Safety first, then clear ownership and an urgent escalation.' },
+        { t: 'Labels can contain errors, so please always check the ingredients.', why: 'Shifts responsibility to the parent at the worst possible moment.' } ] }
+  ];
+  var LEVELS = {
+    1: { title: 'Level 1: Warm or cold?', text: 'Five customers. One reply in each set is clearly warmer and more useful than the others. Spot it.', time: 16 },
+    2: { title: 'Level 2: Almost right', text: 'Now the wrong replies sound polite. Watch for scripted apologies, promises you can\'t keep, and tone that doesn\'t match the customer.', time: 13 },
+    3: { title: 'Level 3: Under pressure', text: 'Angry customers, boundaries and one safety issue. Less time to read, so trust your instincts.', time: 10 }
+  };
+
+  // ------------------------------------------------------------------ helpers
+  var $ = function (id) { return document.getElementById(id); };
+  function shuffle(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function loadBest() { try { return Number(localStorage.getItem('reply-runner-best')) || 0; } catch (e) { return 0; } }
+  function saveBest(v) { try { localStorage.setItem('reply-runner-best', String(v)); } catch (e) { /* storage unavailable */ } }
+
+  // ------------------------------------------------------------------ sound
+  var sound = true, actx = null;
+  function beep(kind) {
+    if (!sound) return;
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      var notes = kind === 'good' ? [523, 784] : kind === 'bad' ? [220, 165] : [440];
+      notes.forEach(function (f, i) {
+        var o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + i * 0.09;
+        o.type = kind === 'bad' ? 'sawtooth' : 'triangle'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.12, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+        o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + 0.18);
+      });
+    } catch (e) { /* audio unavailable */ }
+  }
+
+  // ------------------------------------------------------------------ state
+  var G = {
+    phase: 'menu',        // menu | level | run | breather | feedback | paused | end
+    queue: [], idx: 0, cur: null, order: [],
+    lane: 1, laneX: 1, score: 0, streak: 0, trust: 3, relaxed: false, practice: false,
+    gateD: 0, gateStart: 60, speed: 0, travel: 0, decided: false,
+    results: [], missed: [], breatherLeft: 0, flash: 0, flashColor: '', stumble: 0, sparkles: []
+  };
+
+  // ------------------------------------------------------------------ canvas
+  var cv = $('road'), ctx = cv.getContext('2d'), W = 0, H = 0, DPR = 1;
+  function resize() {
+    var r = cv.getBoundingClientRect(); DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = r.width; H = r.height; cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+
+  // projection: distance d (0 at runner) -> screen
+  function proj(d) {
+    var hz = H * 0.36, bottom = H * 1.02, s = 1 / (1 + d / 9);
+    return { y: hz + (bottom - hz) * s, half: W * 0.46 * s, s: s };
+  }
+  function laneCenter(p, lane) { return W / 2 + (lane - 1) * (p.half * 2 / 3); }
+
+  function drawScene(dt) {
+    var hz = H * 0.36;
+    // sky
+    var g = ctx.createLinearGradient(0, 0, 0, hz);
+    g.addColorStop(0, '#1f2a4d'); g.addColorStop(0.7, '#5b4a73'); g.addColorStop(1, '#f6a96c');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, hz + 1);
+    // sun
+    ctx.fillStyle = 'rgba(255,214,150,.9)'; ctx.beginPath(); ctx.arc(W * 0.74, hz - 4, Math.min(W, H) * 0.07, Math.PI, 0); ctx.fill();
+    // far hills
+    ctx.fillStyle = '#3d3657';
+    ctx.beginPath(); ctx.moveTo(0, hz);
+    for (var x = 0; x <= W; x += W / 12) ctx.lineTo(x, hz - (Math.sin(x / W * 9 + 1) * 0.5 + 0.6) * H * 0.045);
+    ctx.lineTo(W, hz); ctx.fill();
+    // ground
+    var gg = ctx.createLinearGradient(0, hz, 0, H);
+    gg.addColorStop(0, '#2a3b48'); gg.addColorStop(1, '#1d2b36');
+    ctx.fillStyle = gg; ctx.fillRect(0, hz, W, H - hz);
+    // road
+    var far = proj(400), near = proj(0);
+    ctx.fillStyle = '#34314a';
+    ctx.beginPath(); ctx.moveTo(W / 2 - far.half, far.y); ctx.lineTo(W / 2 + far.half, far.y);
+    ctx.lineTo(W / 2 + near.half, near.y); ctx.lineTo(W / 2 - near.half, near.y); ctx.fill();
+    // edges and dashed lane lines
+    var seg = 6, off = G.travel % (seg * 2);
+    for (var d = -off; d < 140; d += seg * 2) {
+      var a = proj(Math.max(0, d)), b = proj(d + seg);
+      [-1, 1].forEach(function (side) {
+        // lane dividers at 1/3
+        quad(W / 2 + side * a.half / 3, a.y, W / 2 + side * b.half / 3, b.y, Math.max(1, a.half * 0.012), Math.max(0.5, b.half * 0.012), '#fff1c9');
+      });
+    }
+    [-1, 1].forEach(function (side) { quad(W / 2 + side * near.half, near.y, W / 2 + side * far.half, far.y, near.half * 0.018, 0.5, '#f6a96c'); });
+    // roadside posts
+    for (var k = -(G.travel % 18); k < 160; k += 18) {
+      var p = proj(Math.max(0.01, k)); if (k < 0) continue;
+      [-1, 1].forEach(function (side) {
+        var x = W / 2 + side * p.half * 1.18, h = 60 * p.s * (H / 400);
+        ctx.fillStyle = '#4b4566'; ctx.fillRect(x - 2 * p.s, p.y - h, Math.max(1, 4 * p.s), h);
+        ctx.fillStyle = 'rgba(255,214,150,.85)'; ctx.beginPath(); ctx.arc(x, p.y - h, Math.max(1, 5 * p.s), 0, Math.PI * 2); ctx.fill();
+      });
+    }
+    // gate
+    if ((G.phase === 'run' || G.phase === 'feedback' || G.phase === 'paused') && G.cur && G.gateD > -2) drawGate(Math.max(0, G.gateD));
+    drawRunner(dt);
+    // sparkles
+    G.sparkles = G.sparkles.filter(function (s) { s.t -= dt; return s.t > 0; });
+    G.sparkles.forEach(function (s) {
+      s.x += s.vx * dt; s.y += s.vy * dt; s.vy += 260 * dt;
+      ctx.fillStyle = 'rgba(46,196,160,' + Math.min(1, s.t * 2) + ')'; ctx.fillRect(s.x, s.y, 4, 4);
+    });
+    // flash
+    if (G.flash > 0) { G.flash -= dt; ctx.fillStyle = G.flashColor.replace('A', String(Math.max(0, G.flash) * 0.5)); ctx.fillRect(0, 0, W, H); }
+  }
+  function quad(x1, y1, x2, y2, w1, w2, color) {
+    ctx.fillStyle = color; ctx.beginPath();
+    ctx.moveTo(x1 - w1, y1); ctx.lineTo(x1 + w1, y1); ctx.lineTo(x2 + w2, y2); ctx.lineTo(x2 - w2, y2); ctx.fill();
+  }
+  function drawGate(d) {
+    var p = proj(d), postH = 120 * p.s * (H / 400), letters = ['A', 'B', 'C'];
+    for (var l = 0; l < 3; l++) {
+      var cx = laneCenter(p, l), wHalf = p.half / 3 * 0.86;
+      var chosen = l === G.lane;
+      ctx.fillStyle = chosen ? '#f6a96c' : 'rgba(255,241,201,.85)';
+      ctx.fillRect(cx - wHalf, p.y - postH, Math.max(2, 6 * p.s), postH);
+      ctx.fillRect(cx + wHalf - Math.max(2, 6 * p.s), p.y - postH, Math.max(2, 6 * p.s), postH);
+      var bh = postH * 0.34;
+      ctx.fillStyle = chosen ? '#f6a96c' : '#fff1c9';
+      roundRect(cx - wHalf, p.y - postH - bh * 0.2, wHalf * 2, bh, Math.max(2, 8 * p.s)); ctx.fill();
+      ctx.fillStyle = '#1c2233'; ctx.font = '700 ' + Math.max(8, bh * 0.62) + 'px Unbounded, Arial Black, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(letters[l], cx, p.y - postH - bh * 0.2 + bh / 2 + 1);
+    }
+  }
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  var runPhase = 0;
+  function drawRunner(dt) {
+    var moving = G.phase === 'run' || G.phase === 'breather';
+    if (moving) runPhase += dt * 11;
+    G.laneX += (G.lane - G.laneX) * Math.min(1, dt * 10);
+    var p = proj(1.2), x = W / 2 + (G.laneX - 1) * (p.half * 2 / 3), sc = H / 400, baseY = p.y - 6 * sc;
+    if (G.stumble > 0) { G.stumble -= dt; if (!reduceMotion) x += Math.sin(G.stumble * 60) * 6 * sc; }
+    var bob = moving ? Math.abs(Math.sin(runPhase)) * 5 * sc : 0, swing = moving ? Math.sin(runPhase) : 0;
+    ctx.save(); ctx.translate(x, baseY - bob); ctx.lineCap = 'round';
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(0, bob + 2 * sc, 22 * sc, 6 * sc, 0, 0, Math.PI * 2); ctx.fill();
+    // legs
+    ctx.strokeStyle = '#1c2233'; ctx.lineWidth = 7 * sc;
+    ctx.beginPath(); ctx.moveTo(-5 * sc, -34 * sc); ctx.lineTo(-5 * sc + swing * 10 * sc, -2 * sc); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(5 * sc, -34 * sc); ctx.lineTo(5 * sc - swing * 10 * sc, -2 * sc); ctx.stroke();
+    // body
+    ctx.fillStyle = '#1f9e7c'; roundRect(-14 * sc, -72 * sc, 28 * sc, 40 * sc, 9 * sc); ctx.fill();
+    // arms
+    ctx.strokeStyle = '#1f9e7c'; ctx.lineWidth = 6 * sc;
+    ctx.beginPath(); ctx.moveTo(-13 * sc, -64 * sc); ctx.lineTo(-20 * sc - swing * 6 * sc, -42 * sc); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(13 * sc, -64 * sc); ctx.lineTo(20 * sc + swing * 6 * sc, -42 * sc); ctx.stroke();
+    // head
+    ctx.fillStyle = '#e8b48f'; ctx.beginPath(); ctx.arc(0, -86 * sc, 13 * sc, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2b2233'; ctx.beginPath(); ctx.arc(0, -87 * sc, 13 * sc, 0, Math.PI * 2); ctx.fill();
+    // headset
+    ctx.strokeStyle = '#f6a96c'; ctx.lineWidth = 3 * sc;
+    ctx.beginPath(); ctx.arc(0, -88 * sc, 15 * sc, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
+    ctx.fillStyle = '#f6a96c'; roundRect(-17 * sc, -90 * sc, 6 * sc, 10 * sc, 2 * sc); ctx.fill(); roundRect(11 * sc, -90 * sc, 6 * sc, 10 * sc, 2 * sc); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-14 * sc, -82 * sc); ctx.quadraticCurveTo(-12 * sc, -72 * sc, -3 * sc, -74 * sc); ctx.stroke();
+    ctx.restore();
+  }
+
+  // ------------------------------------------------------------------ UI
+  var choiceBtns = Array.prototype.slice.call(document.querySelectorAll('.choice'));
+  function renderHud() {
+    $('hLevel').textContent = G.cur ? (G.practice ? 'Practice' : G.cur.lv) : (G.practice ? 'Practice' : 1);
+    $('hScore').textContent = G.score;
+    $('hStreak').textContent = G.streak;
+    var t = $('hTrust'); t.innerHTML = '';
+    for (var i = 0; i < 3; i++) { var e = document.createElement('i'); if (i >= G.trust) e.className = 'off'; t.appendChild(e); }
+    t.setAttribute('aria-label', G.trust + ' of 3');
+  }
+  function setLane(l) {
+    if (G.phase !== 'run' || G.decided) return;
+    G.lane = Math.max(0, Math.min(2, l));
+    choiceBtns.forEach(function (b, i) { b.setAttribute('aria-pressed', String(i === G.lane)); });
+    beep('tick');
+  }
+  function open(id) { document.querySelectorAll('.overlay').forEach(function (o) { o.classList.remove('open'); }); if (id) { $(id).classList.add('open'); var f = $(id).querySelector('.primary'); if (f) setTimeout(function () { f.focus(); }, 30); } }
+  function toast(html, ms) { var t = $('toast'); t.innerHTML = html; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(function () { t.style.display = 'none'; }, ms || 3200); }
+
+  // ------------------------------------------------------------------ flow
+  function startRun(practiceList) {
+    G.practice = !!practiceList;
+    G.relaxed = $('relaxed').checked;
+    G.queue = practiceList ? shuffle(practiceList) : [1, 2, 3].reduce(function (acc, lv) { return acc.concat(shuffle(S.filter(function (s) { return s.lv === lv; }))); }, []);
+    G.idx = 0; G.score = 0; G.streak = 0; G.trust = 3; G.results = []; G.missed = [];
+    renderHud();
+    if (G.practice) nextScenario(); else showLevel(1);
+  }
+  function showLevel(lv) {
+    G.phase = 'level'; G.trust = 3; renderHud();
+    $('lvTitle').textContent = LEVELS[lv].title; $('lvText').textContent = LEVELS[lv].text;
+    open('ovLevel');
+  }
+  function nextScenario() {
+    if (G.idx >= G.queue.length || G.trust <= 0) return finish();
+    var s = G.queue[G.idx];
+    if (!G.practice && G.idx > 0 && G.queue[G.idx - 1].lv !== s.lv && G.phase !== 'level') return showLevel(s.lv);
+    G.cur = s; G.order = shuffle([0, 1, 2]); G.decided = false;
+    G.lane = 1; choiceBtns.forEach(function (b, i) { b.setAttribute('aria-pressed', String(i === 1)); b.querySelector('.txt').textContent = s.opts[G.order[i]].t; });
+    $('choices').setAttribute('data-locked', 'false'); $('btnSend').disabled = false;
+    $('cName').textContent = s.who; $('cChannel').textContent = s.ch; $('cMood').textContent = s.mood; $('cMsg').textContent = s.msg;
+    var t = G.practice ? 13 : LEVELS[s.lv].time;
+    G.gateStart = 60; G.gateD = G.gateStart; G.speed = G.gateStart / t; G.timeTotal = t;
+    G.phase = 'run'; renderHud(); open(null);
+  }
+  function send() {
+    if (G.phase !== 'run' || G.decided) return;
+    G.decided = true;
+    $('choices').setAttribute('data-locked', 'true'); $('btnSend').disabled = true;
+    G.timeLeftFrac = Math.max(0, G.gateD / G.gateStart);
+    G.rush = true;     // the gate rushes in to meet the runner
+  }
+  function resolve() {
+    var s = G.cur, pick = s.opts[G.order[G.lane]], best = s.opts.filter(function (o) { return o.ok; })[0];
+    G.results.push({ s: s, ok: !!pick.ok });
+    if (pick.ok) {
+      G.streak++; G.trust = Math.min(3, G.trust + 1);
+      var bonus = G.relaxed ? 0 : Math.round(G.timeLeftFrac * 50);
+      G.score += Math.round((100 + bonus) * (1 + Math.min(G.streak - 1, 4) * 0.25));
+      G.flash = 0.35; G.flashColor = 'rgba(46,196,160,A)'; beep('good');
+      for (var i = 0; i < 18; i++) G.sparkles.push({ x: W / 2 + (G.lane - 1) * W * 0.15, y: H * 0.72, vx: (Math.random() - 0.5) * 260, vy: -120 - Math.random() * 220, t: 0.8 });
+      toast('<b>' + SKILLS[s.skill].name + '.</b> ' + pick.why, 3400);
+      G.phase = 'breather'; G.breatherLeft = 2.2; renderHud();
+    } else {
+      G.streak = 0; G.trust--; G.missed.push(s);
+      G.flash = 0.45; G.flashColor = 'rgba(217,79,79,A)'; G.stumble = 0.5; beep('bad'); renderHud();
+      $('fbConcept').textContent = SKILLS[s.skill].name;
+      $('fbChosen').textContent = pick.t; $('fbWhyBad').textContent = pick.why;
+      $('fbBest').textContent = best.t; $('fbWhyGood').textContent = best.why;
+      G.phase = 'feedback';
+      setTimeout(function () { if (G.phase === 'feedback') open('ovFeedback'); }, 450);
+    }
+  }
+  function afterFeedback() { open(null); G.idx++; G.phase = 'breather'; G.breatherLeft = G.trust <= 0 ? 0.01 : 1.2; }
+  function finish() {
+    G.phase = 'end';
+    var best = loadBest(); if (!G.practice && G.score > best) { best = G.score; saveBest(best); }
+    var right = G.results.filter(function (r) { return r.ok; }).length;
+    $('endTitle').textContent = G.trust <= 0 ? 'The customers ran out of patience' : G.practice ? 'Practice round complete' : 'Shift complete';
+    $('eScore').textContent = G.score; $('eAcc').textContent = G.results.length ? Math.round(right / G.results.length * 100) + '%' : '0%'; $('eBest').textContent = best;
+    var per = {};
+    G.results.forEach(function (r) { var k = r.s.skill; per[k] = per[k] || { n: 0, ok: 0 }; per[k].n++; if (r.ok) per[k].ok++; });
+    var bars = '', weak = [];
+    Object.keys(SKILLS).forEach(function (k) {
+      if (!per[k]) return;
+      var pc = Math.round(per[k].ok / per[k].n * 100);
+      if (pc < 100) weak.push(k);
+      bars += '<div class="bar"><span>' + SKILLS[k].name + '</span><span class="track"><span class="fill' + (pc < 60 ? ' low' : '') + '" style="width:' + Math.max(4, pc) + '%"></span></span><em>' + per[k].ok + ' of ' + per[k].n + '</em></div>';
+    });
+    $('eBars').innerHTML = bars || '<p>No answers recorded.</p>';
+    $('eTips').innerHTML = weak.length
+      ? '<h3>Worth another look</h3>' + weak.map(function (k) { return '<div><b>' + SKILLS[k].name + '</b>' + SKILLS[k].tip + '</div>'; }).join('')
+      : '<h3>Every skill right first time</h3><p>Try a run without relaxed pace for a higher score.</p>';
+    var missedUnique = G.missed.filter(function (s, i, a) { return a.indexOf(s) === i; });
+    $('btnPractice').style.display = missedUnique.length ? '' : 'none';
+    $('btnPractice').textContent = 'Practise the ' + missedUnique.length + ' I missed';
+    $('btnPractice').onclick = function () { startRun(missedUnique); };
+    renderHud(); open('ovEnd');
+  }
+  function pause() { if (G.phase !== 'run' && G.phase !== 'breather') return; G.prevPhase = G.phase; G.phase = 'paused'; open('ovPause'); }
+  function resume() { if (G.phase !== 'paused') return; G.phase = G.prevPhase; open(null); }
+
+  // ------------------------------------------------------------------ loop
+  var last = performance.now();
+  function frame(now) {
+    var dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (!W) resize();
+    if (G.phase === 'run') {
+      var v = G.rush ? Math.max(G.speed * 4, 45) : G.speed;
+      if (G.relaxed && !G.decided) { v = G.gateD > 14 ? G.speed : 0; }
+      G.gateD -= v * dt; G.travel += Math.max(v, G.speed * 0.6) * dt;
+      var frac = Math.max(0, G.gateD / G.gateStart);
+      $('timer').style.transform = 'scaleX(' + (G.relaxed ? 1 : frac) + ')';
+      if (G.gateD <= 0) {
+        if (!G.decided) { G.decided = true; G.timeLeftFrac = 0; $('choices').setAttribute('data-locked', 'true'); $('btnSend').disabled = true; }
+        G.rush = false; resolve();
+      }
+    } else if (G.phase === 'breather') {
+      G.travel += 12 * dt; G.breatherLeft -= dt; $('timer').style.transform = 'scaleX(0)';
+      if (G.breatherLeft <= 0) { if (G.results.length && G.results[G.results.length - 1].ok && G.idx < G.queue.length && G.queue[G.idx] === G.cur) G.idx++; nextScenario(); }
+    } else if (G.phase === 'menu' || G.phase === 'level' || G.phase === 'end') {
+      G.travel += 6 * dt;
+    }
+    drawScene(dt);
+    requestAnimationFrame(frame);
+  }
+
+  // ------------------------------------------------------------------ input
+  document.addEventListener('keydown', function (e) {
+    if (G.phase === 'run') {
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { setLane(G.lane - 1); e.preventDefault(); }
+      else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { setLane(G.lane + 1); e.preventDefault(); }
+      else if (e.key === '1' || e.key === '2' || e.key === '3') setLane(Number(e.key) - 1);
+      else if ((e.key === 'Enter' || e.key === ' ') && document.activeElement && !document.activeElement.classList.contains('iconbtn')) { send(); e.preventDefault(); }
+    }
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') { if (G.phase === 'paused') resume(); else pause(); }
+  });
+  choiceBtns.forEach(function (b, i) {
+    b.addEventListener('click', function () { if (G.phase !== 'run' || G.decided) return; if (G.lane === i && G.relaxed) send(); else setLane(i); });
+  });
+  var sx = null;
+  $('stage').addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; }, { passive: true });
+  $('stage').addEventListener('touchend', function (e) {
+    if (sx === null) return; var dx = e.changedTouches[0].clientX - sx; sx = null;
+    if (Math.abs(dx) > 40) setLane(G.lane + (dx > 0 ? 1 : -1));
+  });
+  $('btnSend').addEventListener('click', send);
+  $('btnStart').addEventListener('click', function () { startRun(null); });
+  $('btnLevelGo').addEventListener('click', function () { nextScenario(); });
+  $('btnFbGo').addEventListener('click', afterFeedback);
+  $('btnPause').addEventListener('click', function () { if (G.phase === 'paused') resume(); else pause(); });
+  $('btnResume').addEventListener('click', resume);
+  $('btnQuit').addEventListener('click', function () { finish(); });
+  $('btnAgain').addEventListener('click', function () { open('ovStart'); G.phase = 'menu'; });
+  function notes(from) { G.notesFrom = from; open('ovNotes'); }
+  $('btnNotes').addEventListener('click', function () { notes('ovStart'); });
+  $('btnNotes2').addEventListener('click', function () { notes('ovEnd'); });
+  $('btnNotesClose').addEventListener('click', function () { open(G.notesFrom || 'ovStart'); });
+  $('btnSound').addEventListener('click', function () { sound = !sound; this.textContent = sound ? 'Sound on' : 'Sound off'; this.setAttribute('aria-pressed', String(sound)); });
+
+  // ------------------------------------------------------------------ boot
+  $('cName').textContent = 'Harvest Box support'; $('cChannel').textContent = ''; $('cMood').style.display = 'none';
+  $('cMsg').textContent = 'Customers are on their way. Pick a lane, send your reply.';
+  choiceBtns.forEach(function (b, i) { b.querySelector('.txt').textContent = ['Left lane', 'Centre lane', 'Right lane'][i]; });
+  var moodShown = false;
+  var _next = nextScenario;
+  nextScenario = function () { if (!moodShown) { $('cMood').style.display = ''; moodShown = true; } return _next(); };
+  renderHud(); resize(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
